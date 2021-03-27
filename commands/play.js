@@ -1,10 +1,21 @@
+const Discord = require('discord.js');
 const ytdl = require('ytdl-core');
 const ytSearch = require('yt-search');
 
+const queue = new Map();
+
 module.exports = {
     name: 'play',
+    aliases: ['skip', 'stop'],
     description: 'Joins your channel and plays a music from youtube.',
-    async execute(message, args, client) {
+    /**
+     *
+     * @param {Discord.Message} message
+     * @param {string} args
+     * @param {Discord.Client} client
+     * @returns
+     */
+    async execute(message, args, cmd, client, discord) {
         const voiceChannel = message.member.voice.channel;
 
         if (!voiceChannel) {
@@ -13,44 +24,86 @@ module.exports = {
             );
         }
 
-        const isUrl = (str) => {
-            let regex = /(http|https):\/\/(\w+:{0,1\w*})?(\S+)(:[0-9]+)?(\/|\/([\w#!:.?+=&%!\-\/]))?/;
+        const serverQueue = queue.get(message.guild.id);
 
-            return regex.test(str);
-        };
+        if (cmd === 'play') {
+            if (!args.length) return message.channel.send('You need to search for music');
+            let music = {};
 
-        if (isUrl(args[0])) {
-            const connection = await voiceChannel.join();
-            const stream = ytdl(args[0], { filter: 'audioonly' });
+            if (ytdl.validateURL(args[0])) {
+                const musicInfo = await ytdl.getInfo(args[0]);
+                music = {
+                    title: musicInfo.videoDetails.title,
+                    url: musicInfo.videoDetails.video_url,
+                };
+            } else {
+                const videoFinder = async (query) => {
+                    const videoResult = await ytSearch(query);
 
-            connection.play(stream, { seek: 0, volume: 1 }).on('finish', () => {
-                voiceChannel.leave();
-                message.channel.send("I'm leaving. Bye!");
-            });
+                    return videoResult.videos.length > 1 ? videoResult.videos[0] : null;
+                };
 
-            await message.reply(`Now playing ***${args[0]}***`);
+                const video = await videoFinder(args.join(' '));
 
-            return;
-        }
+                if (!video) {
+                    music = { title: video.title, url: video.url };
+                }
 
-        const connection = await voiceChannel.join();
+                return message.channel.send("We couldn't find your music");
+            }
 
-        const videoFinder = async (query) => {
-            const videoResult = await ytSearch(query);
+            if (!serverQueue) {
+                const queueConstructor = {
+                    voiceChannel: voiceChannel,
+                    textChannel: message.channel,
+                    connection: null,
+                    musics: [],
+                };
 
-            return videoResult.videos.length > 1 ? videoResult.videos[0] : null;
-        };
+                queue.set(message.guild.id, queueConstructor);
+                queueConstructor.musics.push(music);
 
-        const video = await videoFinder(args.join(' '));
+                try {
+                    const connection = await voiceChannel.join();
 
-        if (video) {
-            const stream = ytdl(video.url, { filter: 'audioonly' });
-            connection.play(stream, { seek: 0, volume: 1 }).on('finish', () => {
-                voiceChannel.leave();
-                message.channel.send("I'm leaving. Bye!");
-            });
+                    queueConstructor.connection = connection;
 
-            await message.reply(`Now playing ***${video.title}***`);
+                    videoPlayer(message.guild, queueConstructor.musics[0]);
+                } catch (err) {
+                    queue.delete(message.guild.id);
+                    message.channel.send('There was an error when trying to connect.');
+
+                    throw err;
+                }
+            } else {
+                serverQueue.musics.push(music);
+
+                return message.channel.send(`**${music.title}** added to the queue.`);
+            }
         }
     },
+};
+
+/**
+ *
+ * @param {Discord.Guild} guild
+ * @param {*} music
+ */
+const videoPlayer = async (guild, music) => {
+    const musicQueue = queue.get(guild.id);
+
+    if (!music) {
+        musicQueue.voiceChannel.leave();
+        queue.delete(guild.id);
+
+        return;
+    }
+
+    const stream = ytdl(music.url, { filter: 'audioonly' });
+    musicQueue.connection.play(stream, { seel: 0, volume: 0.5 }).on('finish', () => {
+        musicQueue.musics.shift();
+        videoPlayer(guild, musicQueue.musics[0]);
+    });
+
+    await musicQueue.textChannel.send(`Now playing **${music.title}**`);
 };
