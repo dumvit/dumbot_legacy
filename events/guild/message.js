@@ -1,3 +1,12 @@
+const Discord = require('discord.js');
+
+/**
+ *
+ * @param {Discord} discord
+ * @param {Discord.Client} client
+ * @param {Discord.Message} message
+ * @returns
+ */
 module.exports = (discord, client, message) => {
     const PREFIX = process.env.PREFIX;
 
@@ -6,7 +15,9 @@ module.exports = (discord, client, message) => {
     const args = message.content.slice(PREFIX.length).split(/ +/);
     const cmd = args.shift().toLowerCase();
 
-    const command = client.commands.get(cmd);
+    const command =
+        client.commands.get(cmd) ||
+        client.commands.find((a) => a.aliases && a.aliases.includes(cmd));
 
-    if (command) command.execute(client, message, args, discord);
+    if (command) command.execute(message, args, cmd, client, discord);
 };
