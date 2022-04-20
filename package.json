@@ -4,12 +4,13 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "nodemon index.js"
   },
   "author": "Dumvit",
   "license": "ISC",
   "dependencies": {
     "@discordjs/opus": "^0.7.0",
+    "axios": "^0.26.0",
     "discord.js": "^13.6.0",
     "ffmpeg-static": "^4.4.1",
     "yt-search": "^2.10.3",
@@ -19,7 +20,14 @@
     "@babel/core": "^7.17.5",
     "babel-loader": "^8.2.3",
     "dotenv": "^16.0.0",
+    "nodemon": "^2.0.15",
+    "prettier": "^2.5.1",
     "webpack": "^5.69.1",
     "webpack-cli": "^4.9.2"
+  },
+  "prettier": {
+    "singleQuote": true,
+    "trailingComma": "all",
+    "tabWidth": 4
   }
 }
